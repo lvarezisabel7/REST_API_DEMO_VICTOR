@@ -31,7 +31,7 @@ public interface ProductoDao extends JpaRepository<Producto, Integer> {
      */
 
     @Query(value = "select p from Producto p left join fetch p.presentacion", 
-          countQuery = "select count(p) from Producto p left join fetch p.presentacion") 
+          countQuery = "select count(p) from Producto p left join p.presentacion") 
     public Page<Producto> findAll(Pageable pageable);
 
     @Query(value = "select p from Producto p left join fetch p.presentacion")
