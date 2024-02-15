@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -196,4 +197,28 @@ public class ProductoController {
 
         return responseEntity;
     }
+
+    // Eliminar un producto por el ID
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteProductById(@PathVariable(name = "id", 
+                                                                required = true) Integer idProduct) {
+        Map<String, Object> responseAsMap = new HashMap<>();
+        ResponseEntity<Map<String, Object>> responseEntity = null;
+
+        try {
+            productoService.delete(productoService.findById(idProduct));
+            String successMessage = "Producto con id " + idProduct + ", eliminado exitosamente";
+            responseAsMap.put("successMessage", successMessage);
+            responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, HttpStatus.OK);
+        } catch (DataAccessException e) {
+            String errorGrave = "Error grave al intentar eliminar el poducto con id " + idProduct
+                                + ", y la causa mas probable es: " + e.getMostSpecificCause();
+            responseAsMap.put("errorGrave", errorGrave);
+            responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, 
+                                                         HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        return responseEntity;
+    }
 }
+ 
