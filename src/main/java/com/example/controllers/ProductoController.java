@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,9 +24,13 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.entities.Producto;
+import com.example.helpers.FileUploadUtil;
+import com.example.model.FileUploadResponse;
 import com.example.services.ProductoService;
 
 import jakarta.validation.Valid;
@@ -37,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 public class ProductoController {
 
     private final ProductoService productoService;
+    private final FileUploadUtil fileUploadUtil;
 
     // El metodo responde a una request del tipo
     // http://localhost:8080/productos?page=0&size=3
@@ -69,10 +75,23 @@ public class ProductoController {
         return responseEntity;
     }
 
-    // Metodo que persiste un producto y valida que el producto este bien formado
-    @PostMapping
-    public ResponseEntity<Map<String, Object>> saveProduct(@Valid @RequestBody Producto producto,
-            BindingResult validationResults) {
+    /**
+     * Persiste un producto en la base de datos
+     * @throws IOException
+     * 
+     * */
+    // Guardar (Persistir), un producto, con su presentacion en la base de datos
+    // Para probarlo con POSTMAN: Body -> form-data -> producto -> CONTENT TYPE ->
+    // application/json
+    // no se puede dejar el content type en Auto, porque de lo contrario asume
+    // application/octet-stream
+    // y genera una exception MediaTypeNotSupported
+    @PostMapping(consumes = "multipart/form-data")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> saveProduct(
+            @Valid @RequestPart(name = "producto", required = true) Producto producto,
+            BindingResult validationResults,
+            @RequestPart(name = "file", required = false) MultipartFile file) {
 
         Map<String, Object> responseAsMap = new HashMap<>();
         ResponseEntity<Map<String, Object>> responseEntity = null;
@@ -93,6 +112,33 @@ public class ProductoController {
 
             return responseEntity;
 
+        }
+
+        // Comprobamos si hay imagen para el producto
+        if (file != null) {
+
+            try {
+                String fileName = file.getOriginalFilename();
+                String fileCode = fileUploadUtil.saveFile(fileName, file);
+                producto.setImagen(fileCode + "-" + fileName) ;
+
+                // Hay que devolver informacion respecto al archivo que se ha guardado
+                // , para lo cual en una capa model vamos a crear un Record con la info del
+                // archivo que vamos a devolver.
+
+            FileUploadResponse fileUploadResponse = FileUploadResponse
+                       .builder()
+                       .fileName(fileCode + "-" + fileName)
+                       .downloadURI("/productos/downloadFile/" 
+                                 + fileCode + "-" + fileName)
+                       .size(file.getSize())
+                       .build();
+            
+            responseAsMap.put("info de la imagen: ", fileUploadResponse);           
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         // No hay errores en el producto, pues a persistir el producto
@@ -165,34 +211,33 @@ public class ProductoController {
 
     // Metodo que recupera un producto por el ID
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> findProductById(@PathVariable(name = "id", 
-              required = true) Integer idProduct) throws IOException {
-               
+    public ResponseEntity<Map<String, Object>> findProductById(
+            @PathVariable(name = "id", required = true) Integer idProduct) throws IOException {
+
         Map<String, Object> responseAsMap = new HashMap<>();
-        ResponseEntity<Map<String, Object>> responseEntity = null;        
+        ResponseEntity<Map<String, Object>> responseEntity = null;
 
         try {
             Producto producto = productoService.findById(idProduct);
 
-            if(producto != null) {
+            if (producto != null) {
                 String successMessage = "Producto con id " + idProduct + ", encontrado";
                 responseAsMap.put("successMessage", successMessage);
                 responseAsMap.put("producto", producto);
-                responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, HttpStatus.OK);
+                responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
             } else {
                 String errorMessage = "Producto con id " + idProduct + ", no encontrado";
                 responseAsMap.put("error message", errorMessage);
-                responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, HttpStatus.NOT_FOUND);
+                responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.NOT_FOUND);
             }
-            
-            
+
         } catch (DataAccessException e) {
-            String errorGrave = "Se ha producido un error grave al buscar el producto con id " + idProduct +  
-                                ", y la causa mas probable es: " + e.getMostSpecificCause();
+            String errorGrave = "Se ha producido un error grave al buscar el producto con id " + idProduct +
+                    ", y la causa mas probable es: " + e.getMostSpecificCause();
             responseAsMap.put("errorGrave", errorGrave);
-            responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, 
-                                     HttpStatus.INTERNAL_SERVER_ERROR);                    
-            
+            responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+
         }
 
         return responseEntity;
@@ -200,8 +245,8 @@ public class ProductoController {
 
     // Eliminar un producto por el ID
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> deleteProductById(@PathVariable(name = "id", 
-                                                                required = true) Integer idProduct) {
+    public ResponseEntity<Map<String, Object>> deleteProductById(
+            @PathVariable(name = "id", required = true) Integer idProduct) {
         Map<String, Object> responseAsMap = new HashMap<>();
         ResponseEntity<Map<String, Object>> responseEntity = null;
 
@@ -209,16 +254,15 @@ public class ProductoController {
             productoService.delete(productoService.findById(idProduct));
             String successMessage = "Producto con id " + idProduct + ", eliminado exitosamente";
             responseAsMap.put("successMessage", successMessage);
-            responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, HttpStatus.OK);
+            responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap, HttpStatus.OK);
         } catch (DataAccessException e) {
             String errorGrave = "Error grave al intentar eliminar el poducto con id " + idProduct
-                                + ", y la causa mas probable es: " + e.getMostSpecificCause();
+                    + ", y la causa mas probable es: " + e.getMostSpecificCause();
             responseAsMap.put("errorGrave", errorGrave);
-            responseEntity = new ResponseEntity<Map<String,Object>>(responseAsMap, 
-                                                         HttpStatus.INTERNAL_SERVER_ERROR);
+            responseEntity = new ResponseEntity<Map<String, Object>>(responseAsMap,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         return responseEntity;
     }
 }
- 
