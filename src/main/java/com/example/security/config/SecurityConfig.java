@@ -1,5 +1,7 @@
 package com.example.security.config;
 
+import com.example.security.services.OurUserDetailsService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,31 +19,27 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.example.security.services.OurUserDetailsService;
-
-import lombok.RequiredArgsConstructor;
-
 @Configuration
 @EnableWebSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
-    
-    private final OurUserDetailsService ourUserDetailsService;
-    private final JWTAuthFilter jwtAuthFIlter;
+    @Autowired
+    private OurUserDetailsService ourUserDetailsService;
+    @Autowired
+    private JWTAuthFilter jwtAuthFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(request -> request.requestMatchers("/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET,"/productos").hasAnyAuthority("USER", "ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/productos").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/productos").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.POST,"/productos/**").hasAnyAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/productos/**").hasAnyAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/productos/**").hasAnyAuthority("USER", "ADMIN")
                         .anyRequest().authenticated())
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider()).addFilterBefore(
-                        jwtAuthFIlter, UsernamePasswordAuthenticationFilter.class
+                        jwtAuthFilter, UsernamePasswordAuthenticationFilter.class
                 );
         return httpSecurity.build();
     }
